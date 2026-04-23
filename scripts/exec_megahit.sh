@@ -132,56 +132,6 @@ for i in "${FILTERED_FASTQS[@]}"; do
         rm -rf "${SAMPLE_TMP_DIR}"
     fi
 
-<<<<<<< HEAD
-    SAMPLE_TMP_DIR="${GLOBAL_TMP_DIR}/${BASE}"
-    mkdir -p "${SAMPLE_TMP_DIR}"
-    DECOMPRESSED_FASTQ="${SAMPLE_TMP_DIR}/${BASE}_interleaved_filtered.fastq"
-
-    log "[DECOMPRESS] ${BASE}"
-    pigz -dc "${i}" > "${DECOMPRESSED_FASTQ}" \
-        || gzip -dc "${i}" > "${DECOMPRESSED_FASTQ}"
-
-    CONTAINER_FASTQ="/data/${DECOMPRESSED_FASTQ#${PWD}/}"
-    CONTAINER_OUT_SENS="/out/${BASE}/megahit_output/sensitive"
-    CONTAINER_OUT_LARGE="/out/${BASE}/megahit_output/large"
-
-    mkdir -p "${SAMPLE_OUT_DIR}"
-
-    if [[ "${RUN_SENS}" == true ]]; then
-        log "[RUN] megahit sensitive: ${BASE}"
-        singularity exec --cleanenv \
-          --bind "${PWD}:/data" \
-          --bind "${OUT_DIR}:/out" \
-          --pwd /data \
-          "${MEGAHIT_IMAGE}" \
-          megahit \
-          --12 "${CONTAINER_FASTQ}" \
-          -t "${MEGAHIT_THREADS}" \
-          -m "${MEGAHIT_MEM}" \
-          --min-count 2 \
-          --k-list 21,29,39,49,59,69,79,89,99,109,129,141 \
-          -o "${CONTAINER_OUT_SENS}"
-    fi
-
-    if [[ "${RUN_LARGE}" == true ]]; then
-        log "[RUN] megahit large: ${BASE}"
-        singularity exec --cleanenv \
-          --bind "${PWD}:/data" \
-          --bind "${OUT_DIR}:/out" \
-          --pwd /data \
-          "${MEGAHIT_IMAGE}" \
-          megahit \
-          --12 "${CONTAINER_FASTQ}" \
-          -t "${MEGAHIT_THREADS}" \
-          -m "${MEGAHIT_MEM}" \
-          --k-min 27 \
-          --k-max 127 \
-          --k-step 10 \
-          -o "${CONTAINER_OUT_LARGE}"
-    fi
-
-    rm -rf "${SAMPLE_TMP_DIR}"
-=======
     # Symlink each completed assembly into OUT_DIR with the flat names exec_binning.sh expects.
     for _mode in sensitive large; do
         _contigs="${SAMPLE_OUT_DIR}/${_mode}/final.contigs.fa"
@@ -191,7 +141,6 @@ for i in "${FILTERED_FASTQS[@]}"; do
             log "[LINK] ${BASE}_megahit_${_mode}.fasta -> megahit_output/${_mode}/final.contigs.fa"
         fi
     done
->>>>>>> 6db1e1a (adding updates from empirical run)
 done
 
 log "MEGAHIT assembly completed."
