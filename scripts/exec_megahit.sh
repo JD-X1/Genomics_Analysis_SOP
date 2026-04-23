@@ -33,9 +33,9 @@ fi
 INPUT_DIR="$(realpath -m "$1")"
 OUT_DIR="$(realpath -m "$2")"
 
-MEGAHIT_THREADS=40
-MEGAHIT_MEM=858993459200
-MEGAHIT_IMAGE="megahit.sif"
+MEGAHIT_THREADS="${MEGAHIT_THREADS:-40}"
+MEGAHIT_MEM="${MEGAHIT_MEM:-858993459200}"
+MEGAHIT_IMAGE="${MEGAHIT_IMAGE:-megahit.sif}"
 
 if [[ ! -f "${MEGAHIT_IMAGE}" ]]; then
     log "[ERROR] MEGAHIT singularity image not found at ${MEGAHIT_IMAGE}."
@@ -81,9 +81,58 @@ for i in "${FILTERED_FASTQS[@]}"; do
 
     if [[ "${RUN_SENS}" == false && "${RUN_LARGE}" == false ]]; then
         log "[SKIP] Both MEGAHIT runs already complete for ${BASE}, skipping."
-        continue
+    else
+        SAMPLE_TMP_DIR="${GLOBAL_TMP_DIR}/${BASE}"
+        mkdir -p "${SAMPLE_TMP_DIR}"
+        DECOMPRESSED_FASTQ="${SAMPLE_TMP_DIR}/${BASE}_interleaved_filtered.fastq"
+
+        log "[DECOMPRESS] ${BASE}"
+        pigz -dc "${i}" > "${DECOMPRESSED_FASTQ}" \
+            || gzip -dc "${i}" > "${DECOMPRESSED_FASTQ}"
+
+        CONTAINER_FASTQ="/data/${DECOMPRESSED_FASTQ#${PWD}/}"
+        CONTAINER_OUT_SENS="/out/${BASE}/megahit_output/sensitive"
+        CONTAINER_OUT_LARGE="/out/${BASE}/megahit_output/large"
+
+        mkdir -p "${SAMPLE_OUT_DIR}"
+
+        if [[ "${RUN_SENS}" == true ]]; then
+            log "[RUN] megahit sensitive: ${BASE}"
+            singularity exec --cleanenv \
+              --bind "${PWD}:/data" \
+              --bind "${OUT_DIR}:/out" \
+              --pwd /data \
+              "${MEGAHIT_IMAGE}" \
+              megahit \
+              --12 "${CONTAINER_FASTQ}" \
+              -t "${MEGAHIT_THREADS}" \
+              -m "${MEGAHIT_MEM}" \
+              --min-count 2 \
+              --k-list 21,29,39,49,59,69,79,89,99,109,129,141 \
+              -o "${CONTAINER_OUT_SENS}"
+        fi
+
+        if [[ "${RUN_LARGE}" == true ]]; then
+            log "[RUN] megahit large: ${BASE}"
+            singularity exec --cleanenv \
+              --bind "${PWD}:/data" \
+              --bind "${OUT_DIR}:/out" \
+              --pwd /data \
+              "${MEGAHIT_IMAGE}" \
+              megahit \
+              --12 "${CONTAINER_FASTQ}" \
+              -t "${MEGAHIT_THREADS}" \
+              -m "${MEGAHIT_MEM}" \
+              --k-min 28 \
+              --k-max 128 \
+              --k-step 10 \
+              -o "${CONTAINER_OUT_LARGE}"
+        fi
+
+        rm -rf "${SAMPLE_TMP_DIR}"
     fi
 
+<<<<<<< HEAD
     SAMPLE_TMP_DIR="${GLOBAL_TMP_DIR}/${BASE}"
     mkdir -p "${SAMPLE_TMP_DIR}"
     DECOMPRESSED_FASTQ="${SAMPLE_TMP_DIR}/${BASE}_interleaved_filtered.fastq"
@@ -132,6 +181,17 @@ for i in "${FILTERED_FASTQS[@]}"; do
     fi
 
     rm -rf "${SAMPLE_TMP_DIR}"
+=======
+    # Symlink each completed assembly into OUT_DIR with the flat names exec_binning.sh expects.
+    for _mode in sensitive large; do
+        _contigs="${SAMPLE_OUT_DIR}/${_mode}/final.contigs.fa"
+        _link="${OUT_DIR}/${BASE}_megahit_${_mode}.fasta"
+        if [[ -f "${_contigs}" ]]; then
+            ln -sfn "${_contigs}" "${_link}"
+            log "[LINK] ${BASE}_megahit_${_mode}.fasta -> megahit_output/${_mode}/final.contigs.fa"
+        fi
+    done
+>>>>>>> 6db1e1a (adding updates from empirical run)
 done
 
 log "MEGAHIT assembly completed."

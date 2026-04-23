@@ -54,9 +54,6 @@ if [[ $# -ne 4 ]]; then
   exit 2
 fi
 
-module load singularity
-module load openjdk/17.0.5_8
-
 INPUT_DIR=$1
 LABELING_SUFFIXPATTERN_FWD=$2 # e.g., "_R1_001.fastq.gz"
 LABELING_SUFFIXPATTERN_REV=$3 # e.g., "_R2_001.fastq.gz"
@@ -74,6 +71,9 @@ if [[ ${#FWD_FILES[@]} -eq 0 ]]; then
     log "[ERROR] No files found in input directory matching pattern: ${LABELING_SUFFIXPATTERN_FWD}"
     exit 1
 fi
+
+module load singularityce
+module load openjdk/17.0.5_8
 
 log "Interleaving ${#FWD_FILES[@]} read-pairs using ${REFORMAT_JOBS} parallel jobs..."
 

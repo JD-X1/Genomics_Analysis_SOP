@@ -1,6 +1,6 @@
 #!/usr/bin/bash -l
 
-module load singularity
+module load singularityce
 module load openjdk/17.0.5_8
 
 
@@ -35,15 +35,16 @@ if [[ $# -ne 2 ]]; then
 fi
 
 # Configuration, be sure you know your paths!:
-INPUT_DIR=$1 # expects interleaved filter files
-OUT_DIR=$2
+INPUT_DIR="$(realpath -m "$1")"  # expects interleaved filtered files
+OUT_DIR="$(realpath -m "$2")"
 
-# java virt max should be set to 80% of available memory
-MEM_FOR_BLOOM=-Xmx160g
-MEM_FOR_SPADES="800"
-SPADES_THREADS=48 
-BBTOOLS_IMAGE="bbtools_38.86.sif"
-SPADES_IMAGE="spades_3.15.2.sif"
+# java virt max should be set to ~80% of available memory; override with MEM_FOR_BLOOM
+MEM_FOR_BLOOM="${MEM_FOR_BLOOM:--Xmx160g}"
+# SPAdes memory cap in GB; override with MEM_FOR_SPADES
+MEM_FOR_SPADES="${MEM_FOR_SPADES:-800}"
+SPADES_THREADS="${SPADES_THREADS:-${SLURM_CPUS_PER_TASK:-48}}"
+BBTOOLS_IMAGE="${BBTOOLS_IMAGE:-bbtools_38.86.sif}"
+SPADES_IMAGE="${SPADES_IMAGE:-spades_3.15.2.sif}"
 
 
 
@@ -148,18 +149,37 @@ for i in "${BLOOM_FILTERED[@]}"; do
     SAMPLE_TMP_DIR="${OUT_DIR}/${BASE}/tmp"
     mkdir -p "${SAMPLE_TMP_DIR}"
 
-    singularity exec --cleanenv \
-      --bind "$PWD:/data" \
-      --pwd /data \
-      "${SPADES_IMAGE}" \
-      spades.py \
-      -m ${MEM_FOR_SPADES} \
-      -t ${SPADES_THREADS} \
-      --tmp-dir ${SAMPLE_TMP_DIR} \
-      -o "${SAMPLE_OUT_DIR}/spades_output" \
-      --only-assembler \
-      -k 33,55,77,99,127 \
-      --meta \
-      -1 "${SAMPLE_OUT_DIR}/bbcms_output.FWD.fastq.gz" \
-      -2 "${SAMPLE_OUT_DIR}/bbcms_output.REV.fastq.gz"
+    if [[ -f "${SAMPLE_OUT_DIR}/spades_output/scaffolds.fasta" ]]; then
+        log "[SKIP] SPAdes output already exists for ${BASE}"
+    else
+        singularity exec --cleanenv \
+          --bind "$PWD:/data" \
+          --pwd /data \
+          "${SPADES_IMAGE}" \
+          spades.py \
+          -m ${MEM_FOR_SPADES} \
+          -t ${SPADES_THREADS} \
+          --tmp-dir ${SAMPLE_TMP_DIR} \
+          -o "${SAMPLE_OUT_DIR}/spades_output" \
+          --only-assembler \
+          -k 33,55,77,99,127 \
+          --meta \
+          -1 "${SAMPLE_OUT_DIR}/bbcms_output.FWD.fastq.gz" \
+          -2 "${SAMPLE_OUT_DIR}/bbcms_output.REV.fastq.gz"
+    fi
+
+    # Symlink the assembly into OUT_DIR with the flat name exec_binning.sh expects.
+    # Prefers scaffolds.fasta; falls back to contigs.fasta if scaffolding was skipped.
+    _spades_link="${OUT_DIR}/${BASE}_spades.fasta"
+    if [[ ! -e "${_spades_link}" ]]; then
+        if [[ -f "${SAMPLE_OUT_DIR}/spades_output/scaffolds.fasta" ]]; then
+            ln -sfn "${SAMPLE_OUT_DIR}/spades_output/scaffolds.fasta" "${_spades_link}"
+            log "[LINK] ${BASE}_spades.fasta -> spades_output/scaffolds.fasta"
+        elif [[ -f "${SAMPLE_OUT_DIR}/spades_output/contigs.fasta" ]]; then
+            ln -sfn "${SAMPLE_OUT_DIR}/spades_output/contigs.fasta" "${_spades_link}"
+            log "[LINK] ${BASE}_spades.fasta -> spades_output/contigs.fasta (scaffolding fallback)"
+        else
+            log "[WARN] No SPAdes FASTA found for ${BASE} — check spades_output/ for errors"
+        fi
+    fi
 done
