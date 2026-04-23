@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# Omics_Analysis_SOP
-This repository is a group effort between members of the Beman Lab with the goal of providing a resource for future and current lab members to reference for analyses conducted on metagenomes.
-=======
 # Metagenome_Analysis_SOP
 
 This repository contains the Beman Lab metagenome processing pipeline from raw paired-end reads through assembly, binning, DAS Tool refinement, and downstream QC summaries.
